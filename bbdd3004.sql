@@ -95,7 +95,7 @@ CREATE TABLE was_properties (
     port_number INT
 );
 
-CREATE TABLE app_directory (
+CREATE TABLE app_general_properties (
     id UNIQUEIDENTIFIER PRIMARY KEY,
     id_personincharge INT REFERENCES person_in_charge(id),
     id_project_type INT REFERENCES project_type(id),

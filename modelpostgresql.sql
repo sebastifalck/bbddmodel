@@ -25,10 +25,6 @@ DROP TABLE IF EXISTS openshift_properties_directory;
 DROP TABLE IF EXISTS path_directory;
 DROP TABLE IF EXISTS image_directory;
 
--- ===============================
--- CREAR EXTENSIÓN PARA UUID
--- ===============================
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ===============================
 -- CREACIÓN DE TABLAS
@@ -41,15 +37,15 @@ CREATE TABLE project_directory (
 );
 
 CREATE TABLE appname_directory (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    app VARCHAR(100) NOT NULL
+    id SERIAL PRIMARY KEY,
+    app TEXT NOT NULL
 );
 
 CREATE TABLE app_directory (
     id SERIAL PRIMARY KEY,
-    id_appname UUID REFERENCES appname_directory(id),
-    repo_name VARCHAR(100) NOT NULL,
-    repo_url VARCHAR(100) NOT NULL
+    id_appname INT REFERENCES appname_directory(id),
+    repo_name TEXT NOT NULL,
+    repo_url TEXT NOT NULL
 );
 
 CREATE TABLE env_directory (
@@ -59,7 +55,7 @@ CREATE TABLE env_directory (
 
 CREATE TABLE country_directory (
     id SERIAL PRIMARY KEY,
-    country VARCHAR(100)
+    country VARCHAR(100) NOT NULL
 );
 
 CREATE TABLE label_directory (
@@ -128,17 +124,17 @@ CREATE TABLE path_directory (
 
 CREATE TABLE microservice_properties_directory (
     id SERIAL PRIMARY KEY,
-    id_usage INT,
+    id_usage_directory INT RRFERENCES usage_directory(id),
     cpulimits VARCHAR(100),
     cpurequest VARCHAR(100),
     memorylimits VARCHAR(100),
     memoryrequest VARCHAR(100),
     replicas INT,
-    id_token INT,
-    id_openshift_properties_directory INT,
-    id_path_directory INT,
+    id_token_directory INT REFERENCES token_directory(id),
+    id_openshift_properties_directory INT REFERENCES openshift_properties_directory(id),
+    id_path_directory INT REFERENCES path_directory(id),
     drs_enabled BOOLEAN DEFAULT FALSE,
-    id_image_directory INT
+    id_image_directory INT REFERENCES image_directory(id)
 );
 
 CREATE TABLE datastage_properties_directory (

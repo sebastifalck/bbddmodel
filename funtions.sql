@@ -1,3 +1,11 @@
+DROP VIEW IF EXISTS get_microservice_app_properties CASCADE;
+DROP VIEW IF EXISTS get_was_app_properties CASCADE;
+DROP VIEW IF EXISTS get_pims_app_properties CASCADE;
+DROP VIEW IF EXISTS get_ddbb_app_properties CASCADE;
+DROP VIEW IF EXISTS get_datastage_app_properties CASCADE;
+
+
+
 -- =============================================================================================
 
 CREATE OR REPLACE FUNCTION get_microservice_app_properties(p_id_app_directory INT)

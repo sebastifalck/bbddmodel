@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+
+    environment {
+        DB_HOST = 'localhost'
+        DB_NAME = 'almdevops'
+        DB_USER = 'almDevopsAdmin'
+        DB_PASS = 'tu_password'
+        ID_APP = '5' // Cambia esto según el ID que quieras consultar
+    }
+
+    stages {
+        stage('Detectar tipo de aplicación') {
+            steps {
+                script {
+                    def sqlTipo = """
+                        SELECT CASE
+                            WHEN id_microservice_directory IS NOT NULL THEN 'microservice'
+                            WHEN id_datastage_properties_directory IS NOT NULL THEN 'datastage'
+                            WHEN id_database_properties_directory IS NOT NULL THEN 'database'
+                            WHEN id_was_properties_directory IS NOT NULL THEN 'was'
+                            WHEN id_pims_properties_directory IS NOT NULL THEN 'pims'
+                            ELSE 'unknown'
+                        END
+                        FROM app_general_properties
+                        WHERE id_app_directory = ${env.ID_APP};
+                    """
+
+                    def tipo = sh(
+                        script: "PGPASSWORD=${DB_PASS} psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -t -c \"${sqlTipo}\"",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Tipo de aplicación detectado: ${tipo}"
+                    env.appType = tipo
+                }
+            }
+        }
+
+        stage('Consultar información detallada') {
+            steps {
+                script {
+                    def funcion = ""
+
+                    if (env.appType == "microservice") {
+                        funcion = "get_microservice_app_properties"
+                    } else if (env.appType == "was") {
+                        funcion = "get_was_app_properties"
+                    } else if (env.appType == "pims") {
+                        funcion = "get_pims_app_properties"
+                    } else if (env.appType == "database") {
+                        funcion = "get_database_app_properties"
+                    } else if (env.appType == "datastage") {
+                        funcion = "get_datastage_app_properties"
+                    } else {
+                        error "Tipo de aplicación desconocido o no soportado: ${env.appType}"
+                    }
+
+                    def sqlDetalle = "SELECT * FROM ${funcion}(${env.ID_APP});"
+
+                    def resultado = sh(
+                        script: "PGPASSWORD=${DB_PASS} psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -F ',' --no-align -c \"${sqlDetalle}\"",
+                        returnStdout: true
+                    )
+
+                    echo "Resultado de la consulta detallada:\n${resultado}"
+                }
+            }
+        }
+    }
+}

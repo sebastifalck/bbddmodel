@@ -10,6 +10,7 @@ pipeline {
         DB_PASS = 'password'
         DB_NAME = 'almdevops'
         DB_HOST = 'localhost'
+        OUTPUT_FILE = 'app_properties_output.csv'
     }
 
     stages {
@@ -41,32 +42,40 @@ pipeline {
             }
         }
 
-        stage('Ejecutar función correspondiente') {
+        stage('Ejecutar función y generar CSV') {
             steps {
                 script {
                     def functionCall = ""
 
                     if (env.APP_TYPE == "microservice") {
-                        functionCall = "SELECT * FROM get_microservice_app_properties('${params.APP_ID}');"
+                        functionCall = "COPY (SELECT * FROM get_microservice_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
                     } else if (env.APP_TYPE == "was") {
-                        functionCall = "SELECT * FROM get_was_app_properties('${params.APP_ID}');"
+                        functionCall = "COPY (SELECT * FROM get_was_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
                     } else if (env.APP_TYPE == "pims") {
-                        functionCall = "SELECT * FROM get_pims_app_properties('${params.APP_ID}');"
+                        functionCall = "COPY (SELECT * FROM get_pims_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
                     } else if (env.APP_TYPE == "ddbb") {
-                        functionCall = "SELECT * FROM get_ddbb_app_properties('${params.APP_ID}');"
+                        functionCall = "COPY (SELECT * FROM get_ddbb_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
                     } else if (env.APP_TYPE == "datastage") {
-                        functionCall = "SELECT * FROM get_datastage_app_properties('${params.APP_ID}');"
+                        functionCall = "COPY (SELECT * FROM get_datastage_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
                     } else {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
+                    echo "Generando CSV con la consulta..."
+
                     sh """
-                        echo "Ejecutando función:"
-                        echo "${functionCall}"
                         psql -U $DB_USER -h $DB_HOST -d $DB_NAME -c "${functionCall}"
                     """
+
+                    echo "Archivo generado en: ${env.WORKSPACE}/${env.OUTPUT_FILE}"
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: "${env.OUTPUT_FILE}", fingerprint: true
         }
     }
 }

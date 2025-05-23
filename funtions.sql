@@ -1,14 +1,15 @@
-DROP VIEW IF EXISTS get_microservice_app_properties CASCADE;
-DROP VIEW IF EXISTS get_was_app_properties CASCADE;
-DROP VIEW IF EXISTS get_pims_app_properties CASCADE;
-DROP VIEW IF EXISTS get_ddbb_app_properties CASCADE;
-DROP VIEW IF EXISTS get_datastage_app_properties CASCADE;
 
+-- ELIMINACIÓN DE FUNCIONES ANTERIORES
+DROP FUNCTION IF EXISTS get_microservice_app_properties(INT) CASCADE;
+DROP FUNCTION IF EXISTS get_was_app_properties(INT) CASCADE;
+DROP FUNCTION IF EXISTS get_pims_app_properties(INT) CASCADE;
+DROP FUNCTION IF EXISTS get_database_app_properties(INT) CASCADE;
+DROP FUNCTION IF EXISTS get_datastage_app_properties(INT) CASCADE;
 
+-- FUNCIONES ACTUALIZADAS CON p_id_app_general COMO PARÁMETRO
 
--- =============================================================================================
-
-CREATE OR REPLACE FUNCTION get_microservice_app_properties(p_id_app_directory INT)
+-- MICROSERVICE
+CREATE OR REPLACE FUNCTION get_microservice_app_properties(p_id_app_general INT)
 RETURNS TABLE (
     app_general_id INT,
     app_name TEXT,
@@ -52,8 +53,8 @@ BEGIN
         appn.app,
         ad.repo_name,
         ad.repo_url,
-        pj.project_name,
-        pj.project_acronym,
+        pj.project_name::TEXT,
+        pj.project_acronym::TEXT,
         pic.nombre,
         pic.email,
         sc.nombre,
@@ -100,14 +101,12 @@ BEGIN
     LEFT JOIN openshift_properties_directory op ON msd.id_openshift_properties_directory = op.id
     LEFT JOIN path_directory pd ON msd.id_path_directory = pd.id
     LEFT JOIN image_directory img ON msd.id_image_directory = img.id
-    WHERE agp.id_app_directory = p_id_app_directory;
+    WHERE agp.id = p_id_app_general;
 END;
 $$ LANGUAGE plpgsql;
 
-
--- =============================================================================================
-
-CREATE OR REPLACE FUNCTION get_was_app_properties(p_id_app_directory INT)
+-- WAS
+CREATE OR REPLACE FUNCTION get_was_app_properties(p_id_app_general INT)
 RETURNS TABLE (
     app_general_id INT,
     app_name TEXT,
@@ -141,8 +140,8 @@ BEGIN
         appn.app,
         ad.repo_name,
         ad.repo_url,
-        pj.project_name,
-        pj.project_acronym,
+        pj.project_name::TEXT,
+        pj.project_acronym::TEXT,
         pic.nombre,
         pic.email,
         sc.nombre,
@@ -174,15 +173,12 @@ BEGIN
     LEFT JOIN pipeline_properties_directory pp ON agp.id_pipeline_properties_directory = pp.id
     LEFT JOIN runtime_directory rt ON agp.id_runtime_directory = rt.id
     JOIN was_properties_directory was ON agp.id_was_properties_directory = was.id
-    WHERE agp.id_app_directory = p_id_app_directory;
+    WHERE agp.id = p_id_app_general;
 END;
 $$ LANGUAGE plpgsql;
 
-
-
--- =============================================================================================
-
-CREATE OR REPLACE FUNCTION get_pims_app_properties(p_id_app_directory INT)
+-- PIMS
+CREATE OR REPLACE FUNCTION get_pims_app_properties(p_id_app_general INT)
 RETURNS TABLE (
     app_general_id INT,
     app_name TEXT,
@@ -214,8 +210,8 @@ BEGIN
         appn.app,
         ad.repo_name,
         ad.repo_url,
-        pj.project_name,
-        pj.project_acronym,
+        pj.project_name::TEXT,
+        pj.project_acronym::TEXT,
         pic.nombre,
         pic.email,
         sc.nombre,
@@ -245,14 +241,12 @@ BEGIN
     LEFT JOIN pipeline_properties_directory pp ON agp.id_pipeline_properties_directory = pp.id
     LEFT JOIN runtime_directory rt ON agp.id_runtime_directory = rt.id
     JOIN pims_properties_directory pims ON agp.id_pims_properties_directory = pims.id
-    WHERE agp.id_app_directory = p_id_app_directory;
+    WHERE agp.id = p_id_app_general;
 END;
 $$ LANGUAGE plpgsql;
 
-
--- =============================================================================================
-
-CREATE OR REPLACE FUNCTION get_database_app_properties(p_id_app_directory INT)
+-- DATABASE
+CREATE OR REPLACE FUNCTION get_database_app_properties(p_id_app_general INT)
 RETURNS TABLE (
     app_general_id INT,
     app_name TEXT,
@@ -283,8 +277,8 @@ BEGIN
         appn.app,
         ad.repo_name,
         ad.repo_url,
-        pj.project_name,
-        pj.project_acronym,
+        pj.project_name::TEXT,
+        pj.project_acronym::TEXT,
         pic.nombre,
         pic.email,
         sc.nombre,
@@ -313,14 +307,12 @@ BEGIN
     LEFT JOIN pipeline_properties_directory pp ON agp.id_pipeline_properties_directory = pp.id
     LEFT JOIN runtime_directory rt ON agp.id_runtime_directory = rt.id
     JOIN database_properties_directory db ON agp.id_database_properties_directory = db.id
-    WHERE agp.id_app_directory = p_id_app_directory;
+    WHERE agp.id = p_id_app_general;
 END;
 $$ LANGUAGE plpgsql;
 
-
--- =============================================================================================
-
-CREATE OR REPLACE FUNCTION get_datastage_app_properties(p_id_app_directory INT)
+-- DATASTAGE
+CREATE OR REPLACE FUNCTION get_datastage_app_properties(p_id_app_general INT)
 RETURNS TABLE (
     app_general_id INT,
     app_name TEXT,
@@ -351,8 +343,8 @@ BEGIN
         appn.app,
         ad.repo_name,
         ad.repo_url,
-        pj.project_name,
-        pj.project_acronym,
+        pj.project_name::TEXT,
+        pj.project_acronym::TEXT,
         pic.nombre,
         pic.email,
         sc.nombre,
@@ -381,6 +373,6 @@ BEGIN
     LEFT JOIN pipeline_properties_directory pp ON agp.id_pipeline_properties_directory = pp.id
     LEFT JOIN runtime_directory rt ON agp.id_runtime_directory = rt.id
     JOIN datastage_properties_directory ds ON agp.id_datastage_properties_directory = ds.id
-    WHERE agp.id_app_directory = p_id_app_directory;
+    WHERE agp.id = p_id_app_general;
 END;
 $$ LANGUAGE plpgsql;

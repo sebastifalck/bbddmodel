@@ -1,0 +1,36 @@
+pipeline {
+    agent any
+
+    environment {
+        DB_USER = 'almDevopsAdmin'
+        DB_NAME = 'almdevops'
+        DB_HOST = 'localhost'
+        OUTPUT_FILE = 'app_type_env_project.csv'
+    }
+
+    stages {
+        stage('Exportar vista a CSV') {
+            steps {
+                script {
+                    def query = """
+                        COPY (
+                            SELECT * FROM view_app_type_env_project
+                        ) TO STDOUT WITH CSV HEADER;
+                    """
+
+                    sh """
+                        echo "${query}" | psql -U $DB_USER -h $DB_HOST -d $DB_NAME > ${env.OUTPUT_FILE}
+                    """
+
+                    echo "Archivo CSV generado: ${env.OUTPUT_FILE}"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: "${env.OUTPUT_FILE}", fingerprint: true
+        }
+    }
+}

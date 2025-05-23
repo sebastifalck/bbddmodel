@@ -6,8 +6,7 @@ pipeline {
     }
 
     environment {
-        DB_USER = 'usuario'
-        DB_PASS = 'password'
+        DB_USER = 'almDevopsAdmin'
         DB_NAME = 'almdevops'
         DB_HOST = 'localhost'
         OUTPUT_FILE = 'app_properties_output.csv'
@@ -42,32 +41,31 @@ pipeline {
             }
         }
 
-        stage('Ejecutar función y generar CSV') {
+        stage('Exportar a CSV') {
             steps {
                 script {
-                    def functionCall = ""
+                    def functionQuery = ""
 
                     if (env.APP_TYPE == "microservice") {
-                        functionCall = "COPY (SELECT * FROM get_microservice_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
+                        functionQuery = "COPY (SELECT * FROM get_microservice_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "was") {
-                        functionCall = "COPY (SELECT * FROM get_was_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
+                        functionQuery = "COPY (SELECT * FROM get_was_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "pims") {
-                        functionCall = "COPY (SELECT * FROM get_pims_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
+                        functionQuery = "COPY (SELECT * FROM get_pims_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "ddbb") {
-                        functionCall = "COPY (SELECT * FROM get_ddbb_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
+                        functionQuery = "COPY (SELECT * FROM get_ddbb_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "datastage") {
-                        functionCall = "COPY (SELECT * FROM get_datastage_app_properties('${params.APP_ID}')) TO '${env.WORKSPACE}/${env.OUTPUT_FILE}' WITH CSV HEADER;"
+                        functionQuery = "COPY (SELECT * FROM get_datastage_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
                     } else {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
-                    echo "Generando CSV con la consulta..."
-
+                    // Exportar a CSV redirigiendo la salida estándar
                     sh """
-                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -c "${functionCall}"
+                        echo "${functionQuery}" | psql -U $DB_USER -h $DB_HOST -d $DB_NAME > ${env.OUTPUT_FILE}
                     """
 
-                    echo "Archivo generado en: ${env.WORKSPACE}/${env.OUTPUT_FILE}"
+                    echo "CSV generado: ${env.OUTPUT_FILE}"
                 }
             }
         }

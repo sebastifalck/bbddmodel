@@ -1,69 +1,56 @@
 pipeline {
     agent any
 
+    parameters {
+        string(name: 'APP_ID', defaultValue: '', description: 'ID de la aplicación a consultar')
+    }
+
     environment {
-        DB_HOST = 'localhost'
+        DB_USER = 'usuario'
+        DB_PASS = 'password'
         DB_NAME = 'almdevops'
-        DB_USER = 'almDevopsAdmin'
-        DB_PASS = 'tu_password'
-        ID_APP = '5' // Cambia esto según el ID que quieras consultar
+        DB_HOST = 'localhost'
     }
 
     stages {
-        stage('Detectar tipo de aplicación') {
+        stage('Obtener tipo de aplicación') {
             steps {
                 script {
-                    def sqlTipo = """
-                        SELECT CASE
-                            WHEN id_microservice_directory IS NOT NULL THEN 'microservice'
-                            WHEN id_datastage_properties_directory IS NOT NULL THEN 'datastage'
-                            WHEN id_database_properties_directory IS NOT NULL THEN 'database'
-                            WHEN id_was_properties_directory IS NOT NULL THEN 'was'
-                            WHEN id_pims_properties_directory IS NOT NULL THEN 'pims'
-                            ELSE 'unknown'
-                        END
-                        FROM app_general_properties
-                        WHERE id_app_directory = ${env.ID_APP};
-                    """
-
-                    def tipo = sh(
-                        script: "PGPASSWORD=${DB_PASS} psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -t -c \"${sqlTipo}\"",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Tipo de aplicación detectado: ${tipo}"
-                    env.appType = tipo
+                    def tipoApp = sh(script: """
+                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "SELECT a_t.app_type 
+                        FROM app_general_properties a_g
+                        JOIN app_directory a_d ON a_g.id_app_directory = a_d.id
+                        JOIN app_type_directory a_t ON a_d.id_app_type_directory = a_t.id
+                        WHERE a_g.id = '${params.APP_ID}'"
+                    """, returnStdout: true).trim()
+                    
+                    echo "Tipo de aplicación: ${tipoApp}"
+                    env.APP_TYPE = tipoApp
                 }
             }
         }
 
-        stage('Consultar información detallada') {
+        stage('Consultar propiedades de la aplicación') {
             steps {
                 script {
-                    def funcion = ""
-
-                    if (env.appType == "microservice") {
-                        funcion = "get_microservice_app_properties"
-                    } else if (env.appType == "was") {
-                        funcion = "get_was_app_properties"
-                    } else if (env.appType == "pims") {
-                        funcion = "get_pims_app_properties"
-                    } else if (env.appType == "database") {
-                        funcion = "get_database_app_properties"
-                    } else if (env.appType == "datastage") {
-                        funcion = "get_datastage_app_properties"
+                    def query = ""
+                    if (env.APP_TYPE == "microservice") {
+                        query = "SELECT * FROM app_general_properties agp JOIN microservice_properties_directory mpd ON agp.id_microservice_directory = mpd.id WHERE agp.id = '${params.APP_ID}'"
+                    } else if (env.APP_TYPE == "was") {
+                        query = "SELECT * FROM app_general_properties agp JOIN was_properties_directory wpd ON agp.id_was_directory = wpd.id WHERE agp.id = '${params.APP_ID}'"
+                    } else if (env.APP_TYPE == "pims") {
+                        query = "SELECT * FROM app_general_properties agp JOIN pims_properties_directory ppd ON agp.id_pims_directory = ppd.id WHERE agp.id = '${params.APP_ID}'"
+                    } else if (env.APP_TYPE == "ddbb") {
+                        query = "SELECT * FROM app_general_properties agp JOIN database_properties_directory dpd ON agp.id_ddbb_directory = dpd.id WHERE agp.id = '${params.APP_ID}'"
                     } else {
-                        error "Tipo de aplicación desconocido o no soportado: ${env.appType}"
+                        error "Tipo de aplicación no soportado: ${env.APP_TYPE}"
                     }
 
-                    def sqlDetalle = "SELECT * FROM ${funcion}(${env.ID_APP});"
-
-                    def resultado = sh(
-                        script: "PGPASSWORD=${DB_PASS} psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -F ',' --no-align -c \"${sqlDetalle}\"",
-                        returnStdout: true
-                    )
-
-                    echo "Resultado de la consulta detallada:\n${resultado}"
+                    sh """
+                        echo "Ejecutando consulta:"
+                        echo "${query}"
+                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -c "${query}"
+                    """
                 }
             }
         }

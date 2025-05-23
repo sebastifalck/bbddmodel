@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'APP_ID', defaultValue: '', description: 'ID de la aplicación a consultar')
+        string(name: 'APP_ID', defaultValue: '', description: 'ID de la aplicación a consultar (UUID)')
     }
 
     environment {
@@ -13,43 +13,57 @@ pipeline {
     }
 
     stages {
-        stage('Obtener tipo de aplicación') {
+        stage('Detectar tipo de aplicación') {
             steps {
                 script {
-                    def tipoApp = sh(script: """
-                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "SELECT a_t.app_type 
-                        FROM app_general_properties a_g
-                        JOIN app_directory a_d ON a_g.id_app_directory = a_d.id
-                        JOIN app_type_directory a_t ON a_d.id_app_type_directory = a_t.id
-                        WHERE a_g.id = '${params.APP_ID}'"
-                    """, returnStdout: true).trim()
-                    
-                    echo "Tipo de aplicación: ${tipoApp}"
+                    def tipoApp = sh(
+                        script: """
+                            psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "
+                                SELECT
+                                    CASE
+                                        WHEN id_microservice_directory IS NOT NULL THEN 'microservice'
+                                        WHEN id_was_directory IS NOT NULL THEN 'was'
+                                        WHEN id_pims_directory IS NOT NULL THEN 'pims'
+                                        WHEN id_ddbb_directory IS NOT NULL THEN 'ddbb'
+                                        WHEN id_datastage_directory IS NOT NULL THEN 'datastage'
+                                        ELSE 'desconocido'
+                                    END AS app_type
+                                FROM app_general_properties
+                                WHERE id = '${params.APP_ID}'
+                            "
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Tipo de aplicación detectado: ${tipoApp}"
                     env.APP_TYPE = tipoApp
                 }
             }
         }
 
-        stage('Consultar propiedades de la aplicación') {
+        stage('Ejecutar función correspondiente') {
             steps {
                 script {
-                    def query = ""
+                    def functionCall = ""
+
                     if (env.APP_TYPE == "microservice") {
-                        query = "SELECT * FROM app_general_properties agp JOIN microservice_properties_directory mpd ON agp.id_microservice_directory = mpd.id WHERE agp.id = '${params.APP_ID}'"
+                        functionCall = "SELECT * FROM get_microservice_app_properties('${params.APP_ID}');"
                     } else if (env.APP_TYPE == "was") {
-                        query = "SELECT * FROM app_general_properties agp JOIN was_properties_directory wpd ON agp.id_was_directory = wpd.id WHERE agp.id = '${params.APP_ID}'"
+                        functionCall = "SELECT * FROM get_was_app_properties('${params.APP_ID}');"
                     } else if (env.APP_TYPE == "pims") {
-                        query = "SELECT * FROM app_general_properties agp JOIN pims_properties_directory ppd ON agp.id_pims_directory = ppd.id WHERE agp.id = '${params.APP_ID}'"
+                        functionCall = "SELECT * FROM get_pims_app_properties('${params.APP_ID}');"
                     } else if (env.APP_TYPE == "ddbb") {
-                        query = "SELECT * FROM app_general_properties agp JOIN database_properties_directory dpd ON agp.id_ddbb_directory = dpd.id WHERE agp.id = '${params.APP_ID}'"
+                        functionCall = "SELECT * FROM get_ddbb_app_properties('${params.APP_ID}');"
+                    } else if (env.APP_TYPE == "datastage") {
+                        functionCall = "SELECT * FROM get_datastage_app_properties('${params.APP_ID}');"
                     } else {
-                        error "Tipo de aplicación no soportado: ${env.APP_TYPE}"
+                        error "Tipo de aplicación no soportado o ID inválido."
                     }
 
                     sh """
-                        echo "Ejecutando consulta:"
-                        echo "${query}"
-                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -c "${query}"
+                        echo "Ejecutando función:"
+                        echo "${functionCall}"
+                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -c "${functionCall}"
                     """
                 }
             }

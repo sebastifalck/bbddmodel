@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'APP_ID', defaultValue: '', description: 'ID de la aplicación a consultar (UUID)')
+        string(name: 'APP_ID', defaultValue: '', description: 'ID de la aplicación a consultar (INT)')
     }
 
     environment {
@@ -22,14 +22,14 @@ pipeline {
                                 SELECT
                                     CASE
                                         WHEN id_microservice_directory IS NOT NULL THEN 'microservice'
-                                        WHEN id_was_directory IS NOT NULL THEN 'was'
-                                        WHEN id_pims_directory IS NOT NULL THEN 'pims'
-                                        WHEN id_ddbb_directory IS NOT NULL THEN 'ddbb'
-                                        WHEN id_datastage_directory IS NOT NULL THEN 'datastage'
+                                        WHEN id_was_properties_directory IS NOT NULL THEN 'was'
+                                        WHEN id_pims_properties_directory IS NOT NULL THEN 'pims'
+                                        WHEN id_database_properties_directory IS NOT NULL THEN 'ddbb'
+                                        WHEN id_datastage_properties_directory IS NOT NULL THEN 'datastage'
                                         ELSE 'desconocido'
                                     END AS app_type
                                 FROM app_general_properties
-                                WHERE id = '${params.APP_ID}'
+                                WHERE id = ${params.APP_ID}
                             "
                         """,
                         returnStdout: true
@@ -47,25 +47,55 @@ pipeline {
                     def functionQuery = ""
 
                     if (env.APP_TYPE == "microservice") {
-                        functionQuery = "COPY (SELECT * FROM get_microservice_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
+                        functionQuery = "COPY (SELECT * FROM get_microservice_app_properties(${params.APP_ID})) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "was") {
-                        functionQuery = "COPY (SELECT * FROM get_was_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
+                        functionQuery = "COPY (SELECT * FROM get_was_app_properties(${params.APP_ID})) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "pims") {
-                        functionQuery = "COPY (SELECT * FROM get_pims_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
+                        functionQuery = "COPY (SELECT * FROM get_pims_app_properties(${params.APP_ID})) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "ddbb") {
-                        functionQuery = "COPY (SELECT * FROM get_ddbb_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
+                        functionQuery = "COPY (SELECT * FROM get_database_app_properties(${params.APP_ID})) TO STDOUT WITH CSV HEADER"
                     } else if (env.APP_TYPE == "datastage") {
-                        functionQuery = "COPY (SELECT * FROM get_datastage_app_properties('${params.APP_ID}')) TO STDOUT WITH CSV HEADER"
+                        functionQuery = "COPY (SELECT * FROM get_datastage_app_properties(${params.APP_ID})) TO STDOUT WITH CSV HEADER"
                     } else {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
-                    // Exportar a CSV redirigiendo la salida estándar
                     sh """
                         echo "${functionQuery}" | psql -U $DB_USER -h $DB_HOST -d $DB_NAME > ${env.OUTPUT_FILE}
                     """
 
                     echo "CSV generado: ${env.OUTPUT_FILE}"
+                }
+            }
+        }
+
+        stage('Asignar variables desde CSV') {
+            steps {
+                script {
+                    def lines = readFile("${env.OUTPUT_FILE}").split("\\r?\\n")
+                    def headers = lines[0].split(",")
+                    def values = lines[1].split(",")
+
+                    env.HEADERS_LIST = headers.join(",") // Guardar lista de headers para imprimir después
+
+                    for (int i = 0; i < headers.length; i++) {
+                        def varName = headers[i].trim().replaceAll("[^a-zA-Z0-9_]", "_")
+                        def varValue = values.length > i ? values[i].trim() : ""
+                        env."${varName}" = varValue
+                    }
+                }
+            }
+        }
+
+        stage('Imprimir variables') {
+            steps {
+                script {
+                    def headers = env.HEADERS_LIST.split(",")
+
+                    for (def h : headers) {
+                        def cleanName = h.trim().replaceAll("[^a-zA-Z0-9_]", "_")
+                        echo "${cleanName} = ${env[cleanName]}"
+                    }
                 }
             }
         }

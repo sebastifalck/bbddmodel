@@ -89,4 +89,6 @@ if (TIPO_APP == 'microservice') {
     return []
 }
 
+if (TIPO_APP == 'Microservice') return ['']
+return []
 

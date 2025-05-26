@@ -4,21 +4,6 @@ return ['microservice', 'was', 'pims', 'database', 'datastage']
 
 
 
-def campos_por_tipo = [
-    'microservice': ['cpulimits', 'cpurequest', 'memorylimits', 'memoryrequest', 'replicas', 'drs_enabled'],
-    'was': ['host', 'instance_name', 'context_root'],
-    'pims': ['nexus_url'],
-    'database': [],
-    'datastage': []
-]
+if (TIPO_APP == 'Microservice') return ['<input type="text" name="value" value="" placeholder="CPU Limits">']
+return []
 
-def tipo = TIPO_APP
-def campos = campos_por_tipo.get(tipo, [])
-
-def html = "<table>"
-campos.each { campo ->
-    html += "<tr><td>${campo}:</td><td><input type='text' name='value' /></td></tr>"
-}
-html += "</table>"
-
-return html

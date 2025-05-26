@@ -39,3 +39,46 @@ campos.each { campo ->
 html += "</table>"
 
 return html
+
+
+
+
+pipeline {
+    agent any
+    parameters {
+        choice(name: 'TIPO_APP', choices: ['microservice', 'was', 'pims', 'database', 'datastage'], description: 'Selecciona el tipo de aplicación')
+        string(name: 'cpulimits', defaultValue: '', description: 'Límite de CPU')     // Solo si tipo = microservice
+        string(name: 'cpurequest', defaultValue: '', description: 'CPU Request')
+        string(name: 'memorylimits', defaultValue: '', description: 'Memory Limit')
+        string(name: 'memoryrequest', defaultValue: '', description: 'Memory Request')
+        choice(name: 'replicas', choices: ['1', '2', '3', '4', '5'], description: 'Replicas')
+        choice(name: 'drs_enabled', choices: ['true', 'false'], description: 'DRS Enabled')
+        string(name: 'host', defaultValue: '', description: 'Host WAS')               // Solo si tipo = was
+        string(name: 'instance_name', defaultValue: '', description: 'Instance Name')
+        string(name: 'context_root', defaultValue: '', description: 'Context Root')
+        string(name: 'nexus_url', defaultValue: '', description: 'Nexus URL')         // Solo si tipo = pims
+    }
+    stages {
+        stage('Echo Variables') {
+            steps {
+                script {
+                    echo "Tipo de aplicación: ${params.TIPO_APP}"
+                    if (params.TIPO_APP == 'microservice') {
+                        echo "cpulimits: ${params.cpulimits}"
+                        echo "cpurequest: ${params.cpurequest}"
+                        echo "memorylimits: ${params.memorylimits}"
+                        echo "memoryrequest: ${params.memoryrequest}"
+                        echo "replicas: ${params.replicas}"
+                        echo "drs_enabled: ${params.drs_enabled}"
+                    } else if (params.TIPO_APP == 'was') {
+                        echo "host: ${params.host}"
+                        echo "instance_name: ${params.instance_name}"
+                        echo "context_root: ${params.context_root}"
+                    } else if (params.TIPO_APP == 'pims') {
+                        echo "nexus_url: ${params.nexus_url}"
+                    }
+                }
+            }
+        }
+    }
+}

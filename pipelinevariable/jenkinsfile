@@ -1,9 +1,41 @@
+def campos_por_tipo = [
+    'microservice': [
+        [name: 'cpulimits', type: 'text'],
+        [name: 'cpurequest', type: 'text'],
+        [name: 'memorylimits', type: 'text'],
+        [name: 'memoryrequest', type: 'text'],
+        [name: 'replicas', type: 'select', options: ['1', '2', '3', '4', '5']],
+        [name: 'drs_enabled', type: 'select', options: ['true', 'false']]
+    ],
+    'was': [
+        [name: 'host', type: 'text'],
+        [name: 'instance_name', type: 'text'],
+        [name: 'context_root', type: 'text']
+    ],
+    'pims': [
+        [name: 'nexus_url', type: 'text']
+    ],
+    'database': [],
+    'datastage': []
+]
 
-return ['microservice', 'was', 'pims', 'database', 'datastage']
+def tipo = TIPO_APP
+def campos = campos_por_tipo.get(tipo, [])
 
+def html = "<table>"
+campos.each { campo ->
+    html += "<tr><td>${campo.name}:</td><td>"
+    if (campo.type == 'text') {
+        html += "<input type='text' name='${campo.name}' />"
+    } else if (campo.type == 'select') {
+        html += "<select name='${campo.name}'>"
+        campo.options.each { option ->
+            html += "<option value='${option}'>${option}</option>"
+        }
+        html += "</select>"
+    }
+    html += "</td></tr>"
+}
+html += "</table>"
 
-
-
-if (TIPO_APP == 'Microservice') return ['<input type="text" name="value" value="" placeholder="CPU Limits">']
-return []
-
+return html

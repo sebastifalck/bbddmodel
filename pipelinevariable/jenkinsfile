@@ -1,0 +1,8 @@
+if (AMBIENTE == 'dev') {
+    return ['app-dev-1', 'app-dev-2']
+} else if (AMBIENTE == 'qa') {
+    return ['app-qa-1', 'app-qa-2']
+} else if (AMBIENTE == 'prod') {
+    return ['app-prod-1', 'app-prod-2']
+}
+return []

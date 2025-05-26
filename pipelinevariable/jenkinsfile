@@ -1,8 +1,24 @@
-if (AMBIENTE == 'dev') {
-    return ['app-dev-1', 'app-dev-2']
-} else if (AMBIENTE == 'qa') {
-    return ['app-qa-1', 'app-qa-2']
-} else if (AMBIENTE == 'prod') {
-    return ['app-prod-1', 'app-prod-2']
+
+return ['microservice', 'was', 'pims', 'database', 'datastage']
+
+
+
+
+def campos_por_tipo = [
+    'microservice': ['cpulimits', 'cpurequest', 'memorylimits', 'memoryrequest', 'replicas', 'drs_enabled'],
+    'was': ['host', 'instance_name', 'context_root'],
+    'pims': ['nexus_url'],
+    'database': [],
+    'datastage': []
+]
+
+def tipo = TIPO_APP
+def campos = campos_por_tipo.get(tipo, [])
+
+def html = "<table>"
+campos.each { campo ->
+    html += "<tr><td>${campo}:</td><td><input type='text' name='value' /></td></tr>"
 }
-return []
+html += "</table>"
+
+return html

@@ -82,3 +82,11 @@ pipeline {
         }
     }
 }
+
+if (TIPO_APP == 'microservice') {
+    return ["Ingrese el límite de CPU"]
+} else {
+    return []
+}
+
+

@@ -34,13 +34,14 @@ pipeline {
                         """,
                         returnStdout: true
                     ).trim()
+
                     echo "Tipo de aplicación detectado: ${tipoApp}"
                     env.APP_TYPE = tipoApp
                 }
             }
         }
 
-        stage('Exportar a JSON') {
+        stage('Exportar a JSON con wrapper') {
             steps {
                 script {
                     def functionQuery = ""
@@ -59,22 +60,18 @@ pipeline {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
-                    // Guarda salida sin formato adicional
+                    // Ejecuta la consulta y envuelve el resultado en el formato solicitado
                     sh """
-                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -A -c "${functionQuery}" > ${env.OUTPUT_FILE}.raw
+                        APP_RESULT=\$(psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -A -c "${functionQuery}" | grep -v '^$')
+                        # Quita espacios y salto de línea si hay varios registros, los pone como array
+                        if [[ "\$APP_RESULT" =~ ^\\{.*\\}$ ]]; then
+                            # Si es un solo objeto, lo envolvemos en un array
+                            APP_RESULT="[\$APP_RESULT]"
+                        fi
+                        echo "{ \\"${params.APP_ID}\\": \$APP_RESULT }" > ${env.OUTPUT_FILE}
                     """
 
-                    // Ajusta el formato a lo solicitado: { "APP_ID": [ { ... } ] }
-                    script {
-                        def rawText = readFile("${env.OUTPUT_FILE}.raw").trim()
-                        rawText = rawText.readLines().findAll { it }.join('\n')
-
-                        // Corrige para dejar como un array de objetos, no como string plano ni objeto simple
-                        def finalJson = "{ \"${params.APP_ID}\": [ ${rawText} ] }"
-                        writeFile file: "${env.OUTPUT_FILE}", text: finalJson
-
-                        echo "JSON final generado: ${env.OUTPUT_FILE}"
-                    }
+                    echo "JSON generado: ${env.OUTPUT_FILE}"
                 }
             }
         }
@@ -85,13 +82,19 @@ pipeline {
                     def jsonText = readFile("${env.OUTPUT_FILE}").trim()
                     def json = readJSON text: jsonText
 
-                    // Guarda los campos del primer objeto (puedes adaptar si hay varios objetos)
-                    def fields = json["${params.APP_ID}"][0].keySet().join(",")
-                    env.JSON_FIELDS = fields
+                    def fields = []
+                    def item = json["${params.APP_ID}"][0]
+                    if (item != null) {
+                        fields = item.keySet().join(",")
+                        env.JSON_FIELDS = fields
 
-                    json["${params.APP_ID}"][0].each { k, v ->
-                        def varName = k.trim().replaceAll("[^a-zA-Z0-9_]", "_")
-                        env."${varName}" = v.toString()
+                        // Asignar variables de ambiente
+                        item.each { k, v ->
+                            def varName = k.trim().replaceAll("[^a-zA-Z0-9_]", "_")
+                            env."${varName}" = v.toString()
+                        }
+                    } else {
+                        env.JSON_FIELDS = ""
                     }
                 }
             }
@@ -100,7 +103,8 @@ pipeline {
         stage('Imprimir variables') {
             steps {
                 script {
-                    def fields = env.JSON_FIELDS.split(",")
+                    def fields = env.JSON_FIELDS ? env.JSON_FIELDS.split(",") : []
+
                     for (def f : fields) {
                         def cleanName = f.trim().replaceAll("[^a-zA-Z0-9_]", "_")
                         echo "${cleanName} = ${env[cleanName]}"

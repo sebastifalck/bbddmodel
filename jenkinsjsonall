@@ -5,6 +5,7 @@ pipeline {
         DB_USER = 'almDevopsAdmin'
         DB_NAME = 'almdevops'
         DB_HOST = 'localhost'
+        // Puedes dejar este valor por compatibilidad, pero lo usaremos como variable Groovy
         OUTPUT_FILE = 'app_properties_output.json'
     }
 
@@ -12,58 +13,50 @@ pipeline {
         stage('Exportar todo a JSON') {
             steps {
                 script {
-                    // Consulta para todos los registros, el resultado será una lista de pares (id, json_obj)
+                    def outputFile = "app_properties_output.json"  // ¡Nombre fijo local!
+                    
                     def functionQuery = """
                         SELECT
                             agp.id,
                             CASE
-                                WHEN agp.id_microservice_directory IS NOT NULL THEN row_to_json(t1)
-                                WHEN agp.id_was_properties_directory IS NOT NULL THEN row_to_json(t2)
-                                WHEN agp.id_pims_properties_directory IS NOT NULL THEN row_to_json(t3)
-                                WHEN agp.id_database_properties_directory IS NOT NULL THEN row_to_json(t4)
-                                WHEN agp.id_datastage_properties_directory IS NOT NULL THEN row_to_json(t5)
+                                WHEN agp.id_microservice_directory IS NOT NULL THEN
+                                    (SELECT row_to_json(x) FROM get_microservice_app_properties(agp.id) x)
+                                WHEN agp.id_was_properties_directory IS NOT NULL THEN
+                                    (SELECT row_to_json(x) FROM get_was_app_properties(agp.id) x)
+                                WHEN agp.id_pims_properties_directory IS NOT NULL THEN
+                                    (SELECT row_to_json(x) FROM get_pims_app_properties(agp.id) x)
+                                WHEN agp.id_database_properties_directory IS NOT NULL THEN
+                                    (SELECT row_to_json(x) FROM get_database_app_properties(agp.id) x)
+                                WHEN agp.id_datastage_properties_directory IS NOT NULL THEN
+                                    (SELECT row_to_json(x) FROM get_datastage_app_properties(agp.id) x)
                                 ELSE NULL
                             END AS json_obj
                         FROM app_general_properties agp
-                        LEFT JOIN get_microservice_app_properties(agp.id) t1 ON agp.id_microservice_directory IS NOT NULL
-                        LEFT JOIN get_was_app_properties(agp.id) t2 ON agp.id_was_properties_directory IS NOT NULL
-                        LEFT JOIN get_pims_app_properties(agp.id) t3 ON agp.id_pims_properties_directory IS NOT NULL
-                        LEFT JOIN get_database_app_properties(agp.id) t4 ON agp.id_database_properties_directory IS NOT NULL
-                        LEFT JOIN get_datastage_app_properties(agp.id) t5 ON agp.id_datastage_properties_directory IS NOT NULL
-                        WHERE
-                            agp.id_microservice_directory IS NOT NULL
-                            OR agp.id_was_properties_directory IS NOT NULL
-                            OR agp.id_pims_properties_directory IS NOT NULL
-                            OR agp.id_database_properties_directory IS NOT NULL
-                            OR agp.id_datastage_properties_directory IS NOT NULL
                     """
 
-                    // Exporta el resultado a un archivo
+                    // Exporta el resultado a un archivo CSV simple
                     sh """
                         psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -A -F ',' -c "${functionQuery}" > raw_output.csv
                     """
-                }
-            }
-        }
 
-        stage('Armar JSON final') {
-            steps {
-                script {
-                    // Lee el archivo y lo convierte en el formato JSON pedido
+                    // Lee el archivo y construye el JSON final
                     def lines = readFile('raw_output.csv').readLines().findAll { it }
                     def result = [:]
                     for (line in lines) {
                         def parts = line.split(',', 2)
                         def id = parts[0].trim()
-                        def jsonObjStr = parts[1].trim()
+                        def jsonObjStr = parts.size() > 1 ? parts[1].trim() : ""
                         if (jsonObjStr && jsonObjStr != "NULL") {
                             def jsonObj = readJSON text: jsonObjStr
                             result[id] = [jsonObj]
                         }
                     }
-                    // Escribe el archivo final
-                    writeJSON file: "${env.OUTPUT_FILE}", json: result, pretty: 4
-                    echo "JSON generado: ${env.OUTPUT_FILE}"
+                    // Escribe el archivo final usando el nombre fijo
+                    writeJSON file: outputFile, json: result, pretty: 4
+
+                    // Haz disponible la ruta para el post
+                    env.FINAL_OUTPUT_FILE = outputFile
+                    echo "JSON generado: ${outputFile}"
                 }
             }
         }
@@ -71,7 +64,7 @@ pipeline {
 
     post {
         success {
-            archiveArtifacts artifacts: "${env.OUTPUT_FILE}", fingerprint: true
+            archiveArtifacts artifacts: "${env.FINAL_OUTPUT_FILE}", fingerprint: true
         }
     }
 }

@@ -80,7 +80,21 @@ pipeline {
     }
 
     stages {
-        stage('Crear/Actualizar vista') {
+        stage('Eliminar vista si existe') {
+            steps {
+                script {
+                    def dropViewSQL = "DROP VIEW IF EXISTS view_app_env_versus CASCADE;"
+
+                    sh """
+                        echo "${dropViewSQL}" | psql -U $DB_USER -h $DB_HOST -d $DB_NAME
+                    """
+
+                    echo "Vista view_app_env_versus eliminada si existía."
+                }
+            }
+        }
+
+        stage('Crear vista view_app_env_versus') {
             steps {
                 script {
                     def createViewSQL = """
@@ -92,8 +106,8 @@ pipeline {
                             pj.project_name,
                             MAX(CASE WHEN env.env = 'dev' THEN agp.id END) AS dev_app_general_id,
                             MAX(CASE WHEN env.env = 'qa' THEN agp.id END) AS qa_app_general_id,
-                            MAX(CASE WHEN env.env = 'master' THEN agp.id END) AS master_app_general_id,
-                            MAX(CASE WHEN env.env = 'bbdd' THEN agp.id END) AS bbdd_app_general_id
+                            MAX(CASE WHEN env.env IN ('master', 'prod') THEN agp.id END) AS master_app_general_id,
+                            MAX(CASE WHEN env.env IN ('bbdd', 'database') THEN agp.id END) AS bbdd_app_general_id
                         FROM app_general_properties agp
                         JOIN app_directory ad ON agp.id_app_directory = ad.id
                         JOIN appname_directory adn ON ad.id_appname = adn.id
@@ -124,7 +138,7 @@ pipeline {
                         echo "${exportSQL}" | psql -U $DB_USER -h $DB_HOST -d $DB_NAME > ${env.OUTPUT_FILE}
                     """
 
-                    echo "Archivo CSV generado: ${env.OUTPUT_FILE}"
+                    echo "CSV exportado correctamente: ${env.OUTPUT_FILE}"
                 }
             }
         }

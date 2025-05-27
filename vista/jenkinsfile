@@ -92,7 +92,8 @@ pipeline {
                             pj.project_name,
                             MAX(CASE WHEN env.env = 'dev' THEN agp.id END) AS dev_app_general_id,
                             MAX(CASE WHEN env.env = 'qa' THEN agp.id END) AS qa_app_general_id,
-                            MAX(CASE WHEN env.env = 'prod' THEN agp.id END) AS prod_app_general_id
+                            MAX(CASE WHEN env.env = 'master' THEN agp.id END) AS master_app_general_id,
+                            MAX(CASE WHEN env.env = 'bbdd' THEN agp.id END) AS bbdd_app_general_id
                         FROM app_general_properties agp
                         JOIN app_directory ad ON agp.id_app_directory = ad.id
                         JOIN appname_directory adn ON ad.id_appname = adn.id
@@ -135,4 +136,3 @@ pipeline {
         }
     }
 }
-

@@ -18,7 +18,7 @@ pipeline {
                 script {
                     def tipoApp = sh(
                         script: """
-                            psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "
+                            psql -U \$DB_USER -h \$DB_HOST -d \$DB_NAME -t -c "
                                 SELECT
                                     CASE
                                         WHEN id_microservice_directory IS NOT NULL THEN 'microservice'
@@ -60,13 +60,11 @@ pipeline {
                     }
 
                     sh """
-                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "${functionQuery}" > temp_raw.json
-                        # Elimina espacios, líneas vacías y limpia el resultado
-                        cat temp_raw.json | grep -v '^$' | sed 's/^ *//' | sed 's/,$//' > raw_app.json
+                        # Genera el json crudo
+                        psql -U \$DB_USER -h \$DB_HOST -d \$DB_NAME -t -c "${functionQuery}" | grep -v '^$' | sed 's/^ *//' | sed 's/,$//' > raw_app.json
 
-                        # Obtiene el id para usarlo como clave
-                        APP_ID=${params.APP_ID}
-                        jq --arg id "\$APP_ID" '{($id): [.]}' raw_app.json > ${env.OUTPUT_FILE}
+                        # Genera el JSON final con la estructura solicitada
+                        jq --arg id "${params.APP_ID}" '{($id): [.]}' raw_app.json > ${env.OUTPUT_FILE}
                     """
                     echo "JSON generado: ${env.OUTPUT_FILE}"
                 }

@@ -41,7 +41,7 @@ pipeline {
             }
         }
 
-        stage('Exportar a JSON con wrapper') {
+        stage('Exportar a JSON') {
             steps {
                 script {
                     def functionQuery = ""
@@ -60,55 +60,30 @@ pipeline {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
-                    // Ejecuta la consulta y envuelve el resultado en el formato solicitado
+                    // Guarda solo el JSON simple (sin array ni formateo adicional)
                     sh """
-                        APP_RESULT=\$(psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -A -c "${functionQuery}" | grep -v '^$')
-                        # Quita espacios y salto de línea si hay varios registros, los pone como array
-                        if [[ "\$APP_RESULT" =~ ^\\{.*\\}$ ]]; then
-                            # Si es un solo objeto, lo envolvemos en un array
-                            APP_RESULT="[\$APP_RESULT]"
-                        fi
-                        echo "{ \\"${params.APP_ID}\\": \$APP_RESULT }" > ${env.OUTPUT_FILE}
+                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -A -c "${functionQuery}" > raw_output.json
                     """
+                }
+            }
+        }
+
+        stage('Armar JSON final') {
+            steps {
+                script {
+                    // Lee el objeto JSON plano de la consulta
+                    def jsonText = readFile('raw_output.json').trim()
+                    jsonText = jsonText.readLines().findAll { it }.join('\n') // quita líneas vacías
+                    def jsonObject = readJSON text: jsonText
+
+                    // Construye el JSON final en el formato solicitado
+                    def result = [:]
+                    result["${params.APP_ID}"] = [jsonObject]
+
+                    // Lo escribe al archivo OUTPUT_FILE
+                    writeJSON file: "${env.OUTPUT_FILE}", json: result, pretty: 4
 
                     echo "JSON generado: ${env.OUTPUT_FILE}"
-                }
-            }
-        }
-
-        stage('Leer y asignar variables desde JSON') {
-            steps {
-                script {
-                    def jsonText = readFile("${env.OUTPUT_FILE}").trim()
-                    def json = readJSON text: jsonText
-
-                    def fields = []
-                    def item = json["${params.APP_ID}"][0]
-                    if (item != null) {
-                        fields = item.keySet().join(",")
-                        env.JSON_FIELDS = fields
-
-                        // Asignar variables de ambiente
-                        item.each { k, v ->
-                            def varName = k.trim().replaceAll("[^a-zA-Z0-9_]", "_")
-                            env."${varName}" = v.toString()
-                        }
-                    } else {
-                        env.JSON_FIELDS = ""
-                    }
-                }
-            }
-        }
-
-        stage('Imprimir variables') {
-            steps {
-                script {
-                    def fields = env.JSON_FIELDS ? env.JSON_FIELDS.split(",") : []
-
-                    for (def f : fields) {
-                        def cleanName = f.trim().replaceAll("[^a-zA-Z0-9_]", "_")
-                        echo "${cleanName} = ${env[cleanName]}"
-                    }
                 }
             }
         }

@@ -160,59 +160,51 @@ pipeline {
         DB_USER = 'almDevopsAdmin'
         DB_NAME = 'almdevops'
         DB_HOST = 'localhost'
-        JSON_FILE = 'project_appnames.json'
-        RAW_CSV = 'project_appnames_raw.csv'
+        OUTPUT_JSON = 'apps_by_project.json'
     }
 
     stages {
-        stage('Exportar datos a CSV') {
+        stage('Generar JSON agrupado') {
             steps {
                 script {
-                    def exportQuery = """
-                        COPY (
-                            SELECT pj.id AS id_projectdirectory,
-                                   pj.project_name,
-                                   adn.id AS appname_id
-                            FROM app_general_properties agp
-                            JOIN app_directory ad ON agp.id_app_directory = ad.id
-                            JOIN appname_directory adn ON ad.id_appname = adn.id
-                            JOIN project_directory pj ON agp.id_project_directory = pj.id
-                            GROUP BY pj.id, pj.project_name, adn.id
-                            ORDER BY pj.project_name, adn.id
-                        ) TO STDOUT WITH CSV HEADER;
-                    """
+                    // Consulta SQL para obtener datos
+                    def rawData = sh(
+                        script: """
+                            psql -U $DB_USER -h $DB_HOST -d $DB_NAME -A -F',' -t -c "
+                                SELECT
+                                    pj.id AS id_project,
+                                    pj.project_name,
+                                    adn.id AS appname_id,
+                                    adn.app AS app_name
+                                FROM app_general_properties agp
+                                JOIN app_directory ad ON agp.id_app_directory = ad.id
+                                JOIN appname_directory adn ON ad.id_appname = adn.id
+                                JOIN project_directory pj ON agp.id_project_directory = pj.id
+                                GROUP BY pj.id, pj.project_name, adn.id, adn.app
+                                ORDER BY pj.id, adn.id;
+                            "
+                        """,
+                        returnStdout: true
+                    ).trim()
 
-                    sh """
-                        echo "${exportQuery}" | psql -U $DB_USER -h $DB_HOST -d $DB_NAME > ${RAW_CSV}
-                    """
-                }
-            }
-        }
+                    def lines = rawData.split("\\r?\\n")
+                    def grouped = [:]
 
-        stage('Convertir a JSON') {
-            steps {
-                script {
-                    def csvContent = readFile(RAW_CSV).split("\\r?\\n")
-                    def headers = csvContent[0].split(",")
-                    def jsonMap = [:]
+                    for (line in lines) {
+                        def (projectId, projectName, appId, appName) = line.split(",", 4)
+                        def key = "${projectId}.${projectName}".trim()
+                        def value = "${appId}.${appName}".trim()
 
-                    csvContent.tail().each { line ->
-                        def cols = line.split(",")
-                        if (cols.length >= 3) {
-                            def projectKey = "${cols[0].trim()}.${cols[1].trim()}"
-                            def appValue = "${cols[2].trim()}.${cols[2].trim()}"
-                            if (!jsonMap.containsKey(projectKey)) {
-                                jsonMap[projectKey] = []
-                            }
-                            if (!(appValue in jsonMap[projectKey])) {
-                                jsonMap[projectKey] << appValue
-                            }
+                        if (!grouped.containsKey(key)) {
+                            grouped[key] = []
                         }
+                        grouped[key] << value
                     }
 
-                    def jsonText = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(jsonMap))
-                    writeFile file: JSON_FILE, text: jsonText
-                    echo "JSON generado:\n${jsonText}"
+                    // Guardar como JSON
+                    def jsonOutput = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(grouped))
+                    writeFile file: "${env.OUTPUT_JSON}", text: jsonOutput
+                    echo "Archivo JSON generado: ${env.OUTPUT_JSON}"
                 }
             }
         }
@@ -220,7 +212,7 @@ pipeline {
 
     post {
         success {
-            archiveArtifacts artifacts: "${JSON_FILE}", fingerprint: true
+            archiveArtifacts artifacts: "${env.OUTPUT_JSON}", fingerprint: true
         }
     }
 }

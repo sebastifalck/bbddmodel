@@ -34,7 +34,6 @@ pipeline {
                         """,
                         returnStdout: true
                     ).trim()
-
                     echo "Tipo de aplicación detectado: ${tipoApp}"
                     env.APP_TYPE = tipoApp
                 }
@@ -47,57 +46,38 @@ pipeline {
                     def functionQuery = ""
 
                     if (env.APP_TYPE == "microservice") {
-                        functionQuery = "SELECT row_to_json(t) FROM get_microservice_app_properties(${params.APP_ID}) AS t;"
+                        functionQuery = "SELECT row_to_json(t) FROM (SELECT * FROM get_microservice_app_properties(${params.APP_ID})) t"
                     } else if (env.APP_TYPE == "was") {
-                        functionQuery = "SELECT row_to_json(t) FROM get_was_app_properties(${params.APP_ID}) AS t;"
+                        functionQuery = "SELECT row_to_json(t) FROM (SELECT * FROM get_was_app_properties(${params.APP_ID})) t"
                     } else if (env.APP_TYPE == "pims") {
-                        functionQuery = "SELECT row_to_json(t) FROM get_pims_app_properties(${params.APP_ID}) AS t;"
+                        functionQuery = "SELECT row_to_json(t) FROM (SELECT * FROM get_pims_app_properties(${params.APP_ID})) t"
                     } else if (env.APP_TYPE == "ddbb") {
-                        functionQuery = "SELECT row_to_json(t) FROM get_database_app_properties(${params.APP_ID}) AS t;"
+                        functionQuery = "SELECT row_to_json(t) FROM (SELECT * FROM get_database_app_properties(${params.APP_ID})) t"
                     } else if (env.APP_TYPE == "datastage") {
-                        functionQuery = "SELECT row_to_json(t) FROM get_datastage_app_properties(${params.APP_ID}) AS t;"
+                        functionQuery = "SELECT row_to_json(t) FROM (SELECT * FROM get_datastage_app_properties(${params.APP_ID})) t"
                     } else {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
                     sh """
-                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -A -c "${functionQuery}" > ${env.OUTPUT_FILE}
-                    """
+                        psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "${functionQuery}" > temp_raw.json
+                        # Elimina espacios, líneas vacías y limpia el resultado
+                        cat temp_raw.json | grep -v '^$' | sed 's/^ *//' | sed 's/,$//' > raw_app.json
 
+                        # Obtiene el id para usarlo como clave
+                        APP_ID=${params.APP_ID}
+                        jq --arg id "\$APP_ID" '{($id): [.]}' raw_app.json > ${env.OUTPUT_FILE}
+                    """
                     echo "JSON generado: ${env.OUTPUT_FILE}"
                 }
             }
         }
 
-        stage('Leer y asignar variables desde JSON') {
+        stage('Imprimir JSON') {
             steps {
                 script {
-                    def jsonText = readFile("${env.OUTPUT_FILE}").trim()
-                    // Elimina líneas vacías o formateos incorrectos
-                    jsonText = jsonText.readLines().findAll { it }.join('\n')
-                    def json = readJSON text: jsonText
-
-                    // Almacena nombres de campos
-                    env.JSON_FIELDS = json.keySet().join(",")
-
-                    // Carga cada campo en el env
-                    json.each { k, v ->
-                        def varName = k.trim().replaceAll("[^a-zA-Z0-9_]", "_")
-                        env."${varName}" = v.toString()
-                    }
-                }
-            }
-        }
-
-        stage('Imprimir variables') {
-            steps {
-                script {
-                    def fields = env.JSON_FIELDS.split(",")
-
-                    for (def f : fields) {
-                        def cleanName = f.trim().replaceAll("[^a-zA-Z0-9_]", "_")
-                        echo "${cleanName} = ${env[cleanName]}"
-                    }
+                    def jsonContent = readFile("${env.OUTPUT_FILE}")
+                    echo "Contenido del JSON generado:\n${jsonContent}"
                 }
             }
         }

@@ -17,8 +17,8 @@ pipeline {
             steps {
                 script {
                     def tipoApp = sh(
-                        script: """
-                            psql -U \$DB_USER -h \$DB_HOST -d \$DB_NAME -t -c "
+                        script: '''
+                            psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "
                                 SELECT
                                     CASE
                                         WHEN id_microservice_directory IS NOT NULL THEN 'microservice'
@@ -29,9 +29,9 @@ pipeline {
                                         ELSE 'desconocido'
                                     END AS app_type
                                 FROM app_general_properties
-                                WHERE id = ${params.APP_ID}
+                                WHERE id = ''' + params.APP_ID + '''
                             "
-                        """,
+                        ''',
                         returnStdout: true
                     ).trim()
                     echo "Tipo de aplicación detectado: ${tipoApp}"
@@ -59,12 +59,12 @@ pipeline {
                         error "Tipo de aplicación no soportado o ID inválido."
                     }
 
-                    sh """
-                        # Genera el json crudo
-                        psql -U \$DB_USER -h \$DB_HOST -d \$DB_NAME -t -c "${functionQuery}" | grep -v '^$' | sed 's/^ *//' | sed 's/,$//' > raw_app.json
+                    // Aquí se concatena la variable, así Groovy NO intenta interpolar $ del shell
+                    sh 'psql -U $DB_USER -h $DB_HOST -d $DB_NAME -t -c "' + functionQuery + '" | grep -v "^$" | sed "s/^ *//" | sed "s/,$//" > raw_app.json'
 
-                        # Genera el JSON final con la estructura solicitada
-                        jq --arg id "${params.APP_ID}" '{($id): [.]}' raw_app.json > ${env.OUTPUT_FILE}
+                    // Usando comillas dobles para Groovy, pero simple para shell y así evitas el problema
+                    sh """
+                        jq --arg id "${params.APP_ID}" '{(\$id): [.]}' raw_app.json > ${env.OUTPUT_FILE}
                     """
                     echo "JSON generado: ${env.OUTPUT_FILE}"
                 }
